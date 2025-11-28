@@ -1,5 +1,3 @@
-use crate::metrics::EntropyMetrics;
-
 /// Input signals for the Sentry engine.
 ///
 /// In a real deployment these might be normalized to [0,1] or z-scores.
@@ -15,17 +13,15 @@ pub struct SentrySignals {
 }
 
 impl SentrySignals {
-    /// Construct signals from metrics and a raw load value.
+    /// Construct SentrySignals directly from raw scores.
     ///
-    /// Scale is deliberately simple:
-    /// - entropy_score ~ variance
-    /// - jitter_score  ~ jitter
-    /// - load_score    ~ raw load (assumed 0..1-ish in the demo)
-    pub fn from_metrics(metrics: &EntropyMetrics, load: f64) -> Self {
+    /// This is mainly used in tests and small demos; in a real system,
+    /// you'd usually go through EntropyMetrics.
+    pub fn from_raw(entropy_score: f64, jitter_score: f64, load_score: f64) -> Self {
         Self {
-            entropy_score: metrics.variance,
-            jitter_score: metrics.jitter,
-            load_score: load,
+            entropy_score,
+            jitter_score,
+            load_score,
         }
     }
 }

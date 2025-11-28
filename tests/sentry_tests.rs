@@ -1,45 +1,42 @@
-use entropy_krypton_core::{
-    EntropyMetrics, SentryConfig, SentryDecision, SentryEngine, SentrySignals,
-};
+use entropy_krypton_core::{SentryConfig, SentryDecision, SentryEngine, SentrySignals};
+
+fn make_engine() -> SentryEngine {
+    SentryEngine::new(SentryConfig {
+        max_entropy_score: 1.0,
+        soft_excess_factor: 1.1, // Keep < 1.1, Throttle between 1.1 and 1.5
+        hard_excess_factor: 1.5, // Kill >= 1.5
+    })
+}
 
 #[test]
 fn low_signals_should_keep() {
-    let engine = SentryEngine::with_default_config();
+    let engine = make_engine();
 
-    let metrics = EntropyMetrics::from_samples(&[0.01, 0.0, -0.01, 0.02]);
-    let signals = SentrySignals::from_metrics(&metrics, 0.2);
-
+    // stress_score = 0.1 + 0.1 + 0.2 = 0.4  (< soft_threshold 1.1)
+    let signals = SentrySignals::from_raw(0.1, 0.1, 0.2);
     let decision = engine.decide("job-low", &signals);
+
     assert_eq!(decision, SentryDecision::Keep);
 }
 
 #[test]
 fn slightly_high_signals_should_throttle() {
-    let mut config = SentryConfig::default();
-    config.max_entropy_score = 0.15;
-    let engine = SentryEngine::new(config);
+    let engine = make_engine();
 
-    let metrics = EntropyMetrics::from_samples(&[0.5, -0.5, 0.4, -0.4]);
-    let signals = SentrySignals::from_metrics(&metrics, 0.5);
-
+    // stress_score = 0.5 + 0.4 + 0.3 = 1.2  (between 1.1 and 1.5)
+    let signals = SentrySignals::from_raw(0.5, 0.4, 0.3);
     let decision = engine.decide("job-mid", &signals);
+
     assert_eq!(decision, SentryDecision::Throttle);
 }
 
 #[test]
 fn extreme_signals_should_kill() {
-    let config = SentryConfig {
-        max_entropy_score: 0.5,
-        max_jitter_score: 0.5,
-        max_load_score: 0.8,
-        hard_excess_factor: 2.0,
-    };
-    let engine = SentryEngine::new(config);
+    let engine = make_engine();
 
-    // Deliberately large variance and load.
-    let metrics = EntropyMetrics::from_samples(&[10.0, -10.0, 8.0, -8.0]);
-    let signals = SentrySignals::from_metrics(&metrics, 2.0);
+    // stress_score = 1.0 + 0.5 + 0.2 = 1.7  (>= 1.5)
+    let signals = SentrySignals::from_raw(1.0, 0.5, 0.2);
+    let decision = engine.decide("job-high", &signals);
 
-    let decision = SentryDecision::Kill;
-    assert_eq!(engine.decide("job-high", &signals), decision);
+    assert_eq!(decision, SentryDecision::Kill);
 }

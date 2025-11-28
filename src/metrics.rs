@@ -41,11 +41,7 @@ impl EntropyMetrics {
             .sum::<f64>()
             / sample_count as f64;
 
-        let jitter = samples
-            .iter()
-            .map(|v| (v - mean).abs())
-            .sum::<f64>()
-            / sample_count as f64;
+        let jitter = samples.iter().map(|v| (v - mean).abs()).sum::<f64>() / sample_count as f64;
 
         Self {
             mean,
