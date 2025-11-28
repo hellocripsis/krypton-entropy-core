@@ -1,5 +1,5 @@
 [package]
-name = "entropy-sentry-core"
+name = "entropy-krypton-core"
 version = "0.1.0"
 edition = "2021"
 description = "A small Rust library for metrics-driven job guarding (keep/throttle/kill) with a simple Sentry engine."

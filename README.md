@@ -1,4 +1,4 @@
-# entropy-sentry-core
+# entropy-krypton-core
 
 A small Rust library for **metrics-driven job guarding**.
 
@@ -7,17 +7,17 @@ You feed it simple metrics and load signals, and it decides whether a job should
 This is a teaching/infra demo crate – not a production policy engine – but it shows how to structure:
 
 - Metrics collection (`EntropyMetrics`)
-- Signal extraction (`SentrySignals`)
-- Decision logic (`SentryEngine`)
+- Signal extraction (`KryptonSignals`)
+- Decision logic (`KryptonEngine`)
 
 ## Quick start
 
 ```bash
-git clone https://github.com/your-user/entropy-sentry-core.git
-cd entropy-sentry-core
+git clone https://github.com/your-user/entropy-krypton-core.git
+cd entropy-krypton-core
 
 # Run tests
 cargo test
 
 # Run the demo
-cargo run --bin sentry_demo
+cargo run --bin krypton_demo

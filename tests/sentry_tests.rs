@@ -1,4 +1,4 @@
-use entropy_sentry_core::{
+use entropy_krypton_core::{
     EntropyMetrics, SentryConfig, SentryDecision, SentryEngine, SentrySignals,
 };
 

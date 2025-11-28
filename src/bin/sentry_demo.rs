@@ -1,4 +1,4 @@
-use entropy_sentry_core::{EntropyMetrics, SentryConfig, SentryEngine, SentrySignals};
+use entropy_krypton_core::{EntropyMetrics, SentryConfig, SentryEngine, SentrySignals};
 
 use rand::Rng;
 
