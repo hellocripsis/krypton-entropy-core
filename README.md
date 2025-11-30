@@ -111,13 +111,6 @@ fn main() {
 portfolio crate: OS RNG in, metrics + decisions out. No custom RNGs, no
 simulated decay, and no proprietary entropy cores.
 
-````
-
-3. In nano: `Ctrl+O`, **Enter**, then `Ctrl+X`.
-
-Back at the shell, run:
-
-```bash
-cd ~/dev/krypton-entropy-core
-sed -n '1,200p' README.md
-````
+```
+::contentReference[oaicite:0]{index=0}
+```
