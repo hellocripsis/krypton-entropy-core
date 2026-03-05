@@ -25,9 +25,9 @@ pub struct EntropyMetrics {
     pub mean: f64,
     pub variance: f64,
     pub jitter: f64,
-    pub sample_count: u64,
+    pub sample_count: usize,
 }
-````
+```
 
 4. Feed those metrics into a sentry policy that returns:
 
@@ -48,6 +48,7 @@ pub struct EntropyConfig {
     pub mean_tolerance: f64,
     pub max_jitter: f64,
     pub kill_jitter: f64,
+    pub window_size: usize,
 }
 ```
 
@@ -67,6 +68,21 @@ cd krypton-entropy-core
 # run tests
 cargo test
 ```
+
+---
+
+## Migration notes
+
+Recent hardening changes include:
+
+- `EntropyConfig` now includes `window_size: usize` for rolling metrics.
+  If you construct it via a struct literal, include `window_size` or use
+  `..EntropyConfig::default()`.
+- `SentryConfig::from_json_str` and `SentryConfig::from_json_file` now
+  return `Result<SentryConfig, SentryConfigError>` and validate config
+  invariants on load.
+- `SentryEngine::decide` now fails closed (`Kill`) when input signals are
+  non-finite (`NaN`/`inf`) or derived thresholds are invalid.
 
 ---
 
@@ -111,6 +127,3 @@ fn main() {
 portfolio crate: OS RNG in, metrics + decisions out. No custom RNGs, no
 simulated decay, and no proprietary entropy cores.
 
-```
-::contentReference[oaicite:0]{index=0}
-```

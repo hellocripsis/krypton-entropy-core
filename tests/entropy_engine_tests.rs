@@ -1,9 +1,4 @@
-use krypton_entropy_core::{
-    EntropyConfig,
-    EntropyEngine,
-    EntropyMetrics,
-    SentryDecision,
-};
+use krypton_entropy_core::{EntropyConfig, EntropyEngine, EntropyMetrics, SentryDecision};
 
 #[test]
 fn engine_stats_look_reasonable() {
@@ -18,11 +13,7 @@ fn engine_stats_look_reasonable() {
     let m: EntropyMetrics = engine.metrics();
 
     // Mean should be near 0.5
-    assert!(
-        (m.mean - 0.5).abs() < 0.05,
-        "mean out of range: {}",
-        m.mean
-    );
+    assert!((m.mean - 0.5).abs() < 0.05, "mean out of range: {}", m.mean);
 
     // Variance should be in a sane band for bit-density of a random u64
     assert!(
@@ -51,9 +42,7 @@ fn default_config_decision_does_not_panic() {
 
     let d: SentryDecision = engine.decision();
     match d {
-        SentryDecision::Keep
-        | SentryDecision::Throttle
-        | SentryDecision::Kill => {} // ok
+        SentryDecision::Keep | SentryDecision::Throttle | SentryDecision::Kill => {} // ok
     }
 }
 
@@ -62,10 +51,11 @@ fn aggressive_config_can_kill_when_metrics_are_weird() {
     // Deliberately insane config to force Kill once we have enough samples.
     let cfg = EntropyConfig {
         min_samples: 64,
-        mean_center: 0.0,     // totally wrong on purpose
+        mean_center: 0.0, // totally wrong on purpose
         mean_tolerance: 0.0001,
         max_jitter: 0.0,
         kill_jitter: 0.0,
+        window_size: 1024,
     };
 
     let mut engine = EntropyEngine::with_config(cfg);
@@ -81,4 +71,20 @@ fn aggressive_config_can_kill_when_metrics_are_weird() {
         "expected Kill under hostile config, got {:?}",
         d
     );
+}
+
+#[test]
+fn metrics_use_rolling_window_size() {
+    let cfg = EntropyConfig {
+        window_size: 128,
+        ..EntropyConfig::default()
+    };
+    let mut engine = EntropyEngine::with_config(cfg);
+
+    for _ in 0..10_000 {
+        engine.sample();
+    }
+
+    let m = engine.metrics();
+    assert_eq!(m.sample_count, 128);
 }

@@ -4,6 +4,8 @@
 //! based on configurable thresholds.
 
 use serde::{Deserialize, Serialize};
+use std::error::Error;
+use std::fmt;
 
 use crate::signals::SentrySignals;
 
@@ -38,6 +40,45 @@ pub struct SentryConfig {
     pub hard_excess_factor: f64,
 }
 
+#[derive(Debug)]
+pub enum SentryConfigError {
+    Io(std::io::Error),
+    Json(serde_json::Error),
+    Invalid(String),
+}
+
+impl fmt::Display for SentryConfigError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Io(err) => write!(f, "I/O error: {err}"),
+            Self::Json(err) => write!(f, "JSON parse error: {err}"),
+            Self::Invalid(msg) => write!(f, "invalid sentry config: {msg}"),
+        }
+    }
+}
+
+impl Error for SentryConfigError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::Io(err) => Some(err),
+            Self::Json(err) => Some(err),
+            Self::Invalid(_) => None,
+        }
+    }
+}
+
+impl From<std::io::Error> for SentryConfigError {
+    fn from(value: std::io::Error) -> Self {
+        Self::Io(value)
+    }
+}
+
+impl From<serde_json::Error> for SentryConfigError {
+    fn from(value: serde_json::Error) -> Self {
+        Self::Json(value)
+    }
+}
+
 impl Default for SentryConfig {
     fn default() -> Self {
         Self {
@@ -49,6 +90,31 @@ impl Default for SentryConfig {
 }
 
 impl SentryConfig {
+    /// Validate config invariants and numeric sanity.
+    pub fn validate(&self) -> Result<(), SentryConfigError> {
+        if !self.max_entropy_score.is_finite() || self.max_entropy_score <= 0.0 {
+            return Err(SentryConfigError::Invalid(
+                "max_entropy_score must be finite and > 0".to_string(),
+            ));
+        }
+        if !self.soft_excess_factor.is_finite() || self.soft_excess_factor <= 0.0 {
+            return Err(SentryConfigError::Invalid(
+                "soft_excess_factor must be finite and > 0".to_string(),
+            ));
+        }
+        if !self.hard_excess_factor.is_finite() || self.hard_excess_factor <= 0.0 {
+            return Err(SentryConfigError::Invalid(
+                "hard_excess_factor must be finite and > 0".to_string(),
+            ));
+        }
+        if self.hard_excess_factor < self.soft_excess_factor {
+            return Err(SentryConfigError::Invalid(
+                "hard_excess_factor must be >= soft_excess_factor".to_string(),
+            ));
+        }
+        Ok(())
+    }
+
     /// Load SentryConfig from a JSON string.
     ///
     /// Example JSON:
@@ -59,15 +125,17 @@ impl SentryConfig {
     ///   "hard_excess_factor": 1.5
     /// }
     /// ```
-    pub fn from_json_str(s: &str) -> serde_json::Result<Self> {
-        serde_json::from_str(s)
+    pub fn from_json_str(s: &str) -> Result<Self, SentryConfigError> {
+        let cfg: Self = serde_json::from_str(s)?;
+        cfg.validate()?;
+        Ok(cfg)
     }
 
     /// Load SentryConfig from a JSON file path.
-    pub fn from_json_file<P: AsRef<std::path::Path>>(path: P) -> std::io::Result<Self> {
+    pub fn from_json_file<P: AsRef<std::path::Path>>(path: P) -> Result<Self, SentryConfigError> {
         let text = std::fs::read_to_string(path)?;
-        let cfg = serde_json::from_str(&text)
-            .map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidData, err))?;
+        let cfg: Self = serde_json::from_str(&text)?;
+        cfg.validate()?;
         Ok(cfg)
     }
 }
@@ -103,12 +171,25 @@ impl SentryEngine {
     /// `job_id` is currently unused, but kept so this can be extended later
     /// (per-job history, logging, etc.).
     pub fn decide(&self, _job_id: &str, signals: &SentrySignals) -> SentryDecision {
+        if !signals.entropy_score.is_finite()
+            || !signals.jitter_score.is_finite()
+            || !signals.load_score.is_finite()
+        {
+            return SentryDecision::Kill;
+        }
+
         // Combine the three signal dimensions into a single "stress" score.
         // You can tune this later; for now we use a simple sum.
         let stress_score = signals.entropy_score + signals.jitter_score + signals.load_score;
 
         let soft_threshold = self.config.max_entropy_score * self.config.soft_excess_factor;
         let hard_threshold = self.config.max_entropy_score * self.config.hard_excess_factor;
+        if !soft_threshold.is_finite()
+            || !hard_threshold.is_finite()
+            || hard_threshold < soft_threshold
+        {
+            return SentryDecision::Kill;
+        }
 
         if stress_score >= hard_threshold {
             SentryDecision::Kill

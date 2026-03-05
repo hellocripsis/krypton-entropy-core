@@ -40,3 +40,23 @@ fn extreme_signals_should_kill() {
 
     assert_eq!(decision, SentryDecision::Kill);
 }
+
+#[test]
+fn nan_signal_should_kill_fail_closed() {
+    let engine = make_engine();
+    let signals = SentrySignals::from_raw(f64::NAN, 0.1, 0.2);
+    let decision = engine.decide("job-nan", &signals);
+    assert_eq!(decision, SentryDecision::Kill);
+}
+
+#[test]
+fn invalid_config_json_should_be_rejected() {
+    let json = r#"{
+        "max_entropy_score": 1.0,
+        "soft_excess_factor": 1.5,
+        "hard_excess_factor": 1.1
+    }"#;
+
+    let result = SentryConfig::from_json_str(json);
+    assert!(result.is_err(), "expected invalid ordering to fail");
+}

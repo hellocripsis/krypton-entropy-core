@@ -1,5 +1,6 @@
 use rand::rngs::OsRng;
 use rand::RngCore;
+use std::collections::VecDeque;
 
 use crate::metrics::EntropyMetrics;
 use crate::sentry::SentryDecision;
@@ -17,6 +18,8 @@ pub struct EntropyConfig {
     pub max_jitter: f64,
     /// Jitter level where we kill.
     pub kill_jitter: f64,
+    /// Number of recent samples kept for rolling metrics.
+    pub window_size: usize,
 }
 
 impl Default for EntropyConfig {
@@ -27,6 +30,7 @@ impl Default for EntropyConfig {
             mean_tolerance: 0.05, // +/- 0.05 around 0.5
             max_jitter: 0.10,
             kill_jitter: 0.18,
+            window_size: 16_384,
         }
     }
 }
@@ -40,6 +44,7 @@ impl EntropyConfig {
             mean_tolerance: 0.03,
             max_jitter: 0.07,
             kill_jitter: 0.14,
+            window_size: 8_192,
         }
     }
 }
@@ -49,7 +54,14 @@ impl EntropyConfig {
 pub struct EntropyEngine {
     cfg: EntropyConfig,
     rng: OsRng,
-    samples: Vec<f64>,
+    samples: VecDeque<f64>,
+    total_samples: u64,
+}
+
+impl Default for EntropyEngine {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl EntropyEngine {
@@ -58,7 +70,8 @@ impl EntropyEngine {
         Self {
             cfg,
             rng: OsRng,
-            samples: Vec::new(),
+            samples: VecDeque::new(),
+            total_samples: 0,
         }
     }
 
@@ -72,13 +85,45 @@ impl EntropyEngine {
         let x: u64 = self.rng.next_u64();
         let bits_set = x.count_ones() as f64;
         let p = bits_set / 64.0;
-        self.samples.push(p);
+        self.samples.push_back(p);
+        self.total_samples = self.total_samples.saturating_add(1);
+        if self.samples.len() > self.cfg.window_size {
+            let _ = self.samples.pop_front();
+        }
         p
     }
 
-    /// Compute current metrics over all samples seen so far.
+    /// Compute current metrics over the rolling sample window.
     pub fn metrics(&self) -> EntropyMetrics {
-        EntropyMetrics::from_samples(&self.samples)
+        let sample_count = self.samples.len();
+        if sample_count == 0 {
+            return EntropyMetrics {
+                mean: 0.0,
+                variance: 0.0,
+                jitter: 0.0,
+                sample_count: 0,
+            };
+        }
+
+        let mean = self.samples.iter().copied().sum::<f64>() / sample_count as f64;
+        let variance = self
+            .samples
+            .iter()
+            .map(|v| {
+                let d = v - mean;
+                d * d
+            })
+            .sum::<f64>()
+            / sample_count as f64;
+        let jitter =
+            self.samples.iter().map(|v| (v - mean).abs()).sum::<f64>() / sample_count as f64;
+
+        EntropyMetrics {
+            mean,
+            variance,
+            jitter,
+            sample_count,
+        }
     }
 
     /// Compute a sentry decision from current metrics.
@@ -86,7 +131,7 @@ impl EntropyEngine {
         let m = self.metrics();
 
         // Not enough data yet – do nothing dramatic.
-        if (m.sample_count as u64) < self.cfg.min_samples {
+        if self.total_samples < self.cfg.min_samples {
             return SentryDecision::Keep;
         }
 
