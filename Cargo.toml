@@ -2,6 +2,7 @@
 name = "krypton-entropy-core"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.58"
 description = "A small Rust library for metrics-driven job guarding (keep/throttle/kill) with a simple Sentry engine."
 license = "MIT"
 

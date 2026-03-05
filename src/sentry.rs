@@ -30,6 +30,14 @@ pub enum SentryDecision {
 /// - If it's between `max_entropy_score * soft_excess_factor` and
 ///   `max_entropy_score * hard_excess_factor`, we Throttle.
 /// - If it's above `max_entropy_score * hard_excess_factor`, we Kill.
+///
+/// # Collapsed Throttle band
+///
+/// Setting `soft_excess_factor == hard_excess_factor` collapses the Throttle
+/// band to zero width.  Any stress score at or above the shared threshold
+/// jumps directly to `Kill`, skipping `Throttle` entirely.  This is
+/// intentional and can be used to implement a binary Keep / Kill policy.
+/// Validate using [`SentryConfig::validate`] if this is undesired.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SentryConfig {
     /// Baseline "safe" maximum score.

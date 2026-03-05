@@ -1,24 +1,26 @@
-/// A single sampled value with a logical timestamp.
-/// In a real system this might be time-based; here it's just a counter.
-#[derive(Debug, Clone)]
-pub struct MetricSnapshot {
-    pub tick: u64,
-    pub value: f64,
-}
-
-/// Aggregate metrics over a short window of samples.
+/// Aggregate metrics over a sample window.
 #[derive(Debug, Clone)]
 pub struct EntropyMetrics {
     pub mean: f64,
     pub variance: f64,
-    /// A simple "jitter" measure: average absolute deviation from the mean.
+    /// Spread measure for the sample window.
+    ///
+    /// When produced by [`EntropyEngine::metrics`] this is the **standard
+    /// deviation** (sqrt of variance), computed in O(1) from running sums.
+    ///
+    /// When produced by [`EntropyMetrics::from_samples`] this is the **mean
+    /// absolute deviation** (MAD), computed in two passes over the slice.
     pub jitter: f64,
-    /// Number of samples included.
+    /// Number of samples included in this snapshot.
     pub sample_count: usize,
 }
 
 impl EntropyMetrics {
     /// Build metrics from a slice of raw sample values.
+    ///
+    /// `jitter` here is the **mean absolute deviation** (MAD).  For values
+    /// drawn from an [`EntropyEngine`] prefer [`EntropyEngine::metrics`], which
+    /// reports standard deviation and is O(1).
     pub fn from_samples(samples: &[f64]) -> Self {
         let sample_count = samples.len();
         if sample_count == 0 {
